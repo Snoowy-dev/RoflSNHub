@@ -1,9 +1,7 @@
 --[[
-    NuanceHUB v5.0 [WIND UI EDITION]
-    + WindUI Integration
-    + Categories: Combat, Visuals, Themes
-    + Custom HUD with Ping Tracker
-    + Mobile UI Toggle & Color Pickers
+    NuanceHUB v5.1 [MOBILE FIX]
+    + Removed VirtualInputManager (Fixed Mobile Crashes)
+    + WindUI Integration, Custom HUD, Color Pickers
 ]]
 
 local Players = game:GetService("Players")
@@ -12,8 +10,8 @@ local Camera = workspace.CurrentCamera
 local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Stats = game:GetService("Stats")
-local VIM = game:GetService("VirtualInputManager")
 local Mouse = LocalPlayer:GetMouse()
+local CoreGui = game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui")
 
 -- --- [ НАСТРОЙКИ ] ---
 local Settings = {
@@ -34,8 +32,7 @@ local Settings = {
 
 local ESP_Objects = {}
 
--- --- [ СОЗДАНИЕ HUD (WATERMARK) И MOBILE BUTTON ] ---
-local CoreGui = game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui")
+-- --- [ HUD (WATERMARK) И MOBILE BUTTON ] ---
 
 -- HUD
 local HudGui = Instance.new("ScreenGui", CoreGui)
@@ -80,21 +77,24 @@ MobBtn.TextColor3 = Color3.new(1,1,1)
 MobBtn.Font = Enum.Font.Code
 MobBtn.TextSize = 12
 MobBtn.Active = true
-MobBtn.Draggable = true -- Можно таскать по экрану
+MobBtn.Draggable = true -- Кнопку можно таскать
 Instance.new("UICorner", MobBtn).CornerRadius = UDim.new(1, 0)
 
+-- БЕЗОПАСНЫЙ ПРИЗЫВ GUI ДЛЯ ТЕЛЕФОНОВ
 MobBtn.MouseButton1Click:Connect(function()
-    -- Имитируем нажатие кнопки B для мобилок, чтобы открыть/закрыть WindUI
-    VIM:SendKeyEvent(true, Settings.MenuKey, false, game)
-    VIM:SendKeyEvent(false, Settings.MenuKey, false, game)
+    -- Ищем GUI, созданный WindUI, и переключаем его напрямую без симуляции кнопок
+    for _, gui in ipairs(CoreGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and (gui.Name == "WindUI" or gui.Name == "NuanceHUB") then
+            gui.Enabled = not gui.Enabled
+        end
+    end
 end)
 
 -- --- [ ЗАГРУЗКА WIND UI ] ---
--- Загружаем саму библиотеку (стандартный сурс Footagesus)
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
 local Window = WindUI:CreateWindow({
-    Title = "NuanceHUB v5.0",
+    Title = "NuanceHUB v5.1",
     Icon = "rbxassetid://10618928818", 
     Author = "Nuance",
     Folder = "NuanceHUB",
@@ -104,19 +104,18 @@ local Window = WindUI:CreateWindow({
     KeySystem = false
 })
 
--- Нотификация при старте
 Window:Notify({
     Title = "Injection Success",
-    Content = "GUI BINDED ON B",
+    Content = "GUI BINDED ON B (Mobile button active)",
     Duration = 5,
 })
 
--- Создаем категории (Табы)
+-- Создаем категории
 local CombatTab = Window:Tab({ Title = "Combat", Icon = "swords" })
 local VisualsTab = Window:Tab({ Title = "Visuals", Icon = "eye" })
 local ThemesTab = Window:Tab({ Title = "Themes", Icon = "palette" })
 
--- --- [ КАТЕГОРИЯ: COMBAT ] ---
+-- --- [ COMBAT ] ---
 CombatTab:Toggle({
     Title = "Aimbot (Hold RMB)",
     Default = false,
@@ -144,7 +143,7 @@ CombatTab:Toggle({
     Callback = function(state) Settings.AntiAim = state end
 })
 
--- --- [ КАТЕГОРИЯ: VISUALS ] ---
+-- --- [ VISUALS ] ---
 VisualsTab:Toggle({
     Title = "Chams (ESP Fill)",
     Default = false,
@@ -169,7 +168,7 @@ VisualsTab:Colorpicker({
     Callback = function(color) Settings.VisualsColor = color end
 })
 
--- --- [ КАТЕГОРИЯ: THEMES ] ---
+-- --- [ THEMES ] ---
 ThemesTab:Colorpicker({
     Title = "HUD (Watermark) Color",
     Default = Settings.HudColor,
@@ -177,9 +176,7 @@ ThemesTab:Colorpicker({
 })
 
 -- --- [ ЛОГИКА ЧИТА ] ---
-
 RunService.RenderStepped:Connect(function()
-    -- ВИЗУАЛЫ
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character then
             if not ESP_Objects[p] then 
@@ -191,33 +188,28 @@ RunService.RenderStepped:Connect(function()
             
             local esp = ESP_Objects[p]
             local char = p.Character
-            
-            -- Динамическое обновление цвета (берется из ColorPicker)
             esp.T.Color = Settings.VisualsColor
 
             if char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
                 local hrp = char.HumanoidRootPart
                 local pos, onS = Camera:WorldToViewportPoint(hrp.Position)
                 
-                -- Линии (Трейсеры)
                 esp.T.Visible = Settings.Tracers and onS
                 if esp.T.Visible then 
                     esp.T.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
                     esp.T.To = Vector2.new(pos.X, pos.Y) 
                 end
                 
-                -- Имена
                 esp.N.Visible = Settings.NameTags and onS
                 if esp.N.Visible then 
                     esp.N.Position = Vector2.new(pos.X, pos.Y - 30)
                     esp.N.Text = p.Name .. " [" .. math.floor(char.Humanoid.Health) .. "]"
                 end
                 
-                -- Подсветка (Chams)
                 local ch = char:FindFirstChild("CyberH")
                 if Settings.Chams then
                     if not ch then ch = Instance.new("Highlight", char); ch.Name = "CyberH" end
-                    ch.FillColor = Settings.VisualsColor -- Цвет из ColorPicker
+                    ch.FillColor = Settings.VisualsColor
                     ch.Enabled = true
                 elseif ch then 
                     ch.Enabled = false 
@@ -228,7 +220,6 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- АИМБОТ
     if Settings.Aimbot and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
         local target = nil
         local dist = Settings.FOV
@@ -248,13 +239,11 @@ RunService.RenderStepped:Connect(function()
 end)
 
 RunService.Heartbeat:Connect(function()
-    -- ANTI-AIM (SPIN BOT)
     if Settings.AntiAim and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
         local hrp = LocalPlayer.Character.HumanoidRootPart
         hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(60), 0)
     end
 
-    -- TRIGGERBOT
     if Settings.Triggerbot and Mouse.Target then
         local p = Players:GetPlayerFromCharacter(Mouse.Target.Parent) or Players:GetPlayerFromCharacter(Mouse.Target.Parent.Parent)
         if p and p ~= LocalPlayer and p.Character.Humanoid.Health > 0 then 
@@ -263,7 +252,6 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- Очистка кэша визуалов при выходе игроков
 Players.PlayerRemoving:Connect(function(player)
     if ESP_Objects[player] then
         ESP_Objects[player].T:Remove()
@@ -272,4 +260,4 @@ Players.PlayerRemoving:Connect(function(player)
     end
 end)
 
-print("NuanceHUB v5.0 (WindUI Edition) Injected Successfully!")
+print("NuanceHUB v5.1 Mobile Fixed!")
